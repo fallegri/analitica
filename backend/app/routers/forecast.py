@@ -7,7 +7,12 @@ from app.routers.auth_deps import require_min_rank
 from app.services.ai_providers import load_config
 from app.services.chart_advisor import ChartInterpretation, ai_assisted_interpret, build_chart_data
 from app.services.data_cache import get_table
-from app.services.forecast_advisor import extract_horizon, interpret_forecast_question
+from app.services.forecast_advisor import (
+    extract_horizon,
+    get_ai_method_recommendation,
+    get_method_recommendation,
+    interpret_forecast_question,
+)
 from app.services.forecasting import run_forecast
 from app.services.history import get_analysis
 
@@ -36,7 +41,17 @@ class ForecastResolveRequest(BaseModel):
     group_by: Optional[str] = None
     time_col: str
     horizon: int = 3
-    method: str = "lineal"
+    method: str = "auto"
+
+
+class MethodRecommendationRequest(BaseModel):
+    analysis_id: str
+    table_label: str
+    measure: str
+    group_by: Optional[str] = None
+    time_col: str
+    use_ai: bool = False
+    user_method: Optional[str] = None
 
 
 @router.post("/forecast/interpret")
@@ -71,6 +86,68 @@ async def forecast_interpret(req: ForecastQuestionRequest, actor: dict = Depends
     }
 
 
+@router.post("/forecast/recommend-method")
+async def recommend_method(req: MethodRecommendationRequest, actor: dict = Depends(require_min_rank("report_viewer"))):
+    """Recomienda el mejor método de proyección basado en análisis estadístico (+ IA opcional)."""
+    analysis = await get_analysis(req.analysis_id)
+    if analysis is None:
+        raise HTTPException(status_code=404, detail="Análisis no encontrado en el historial.")
+    table = _find_table(analysis, req.table_label)
+    if table is None:
+        raise HTTPException(status_code=404, detail="Tabla no encontrada en ese análisis.")
+
+    df = get_table(req.analysis_id, req.table_label)
+    if df is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No tengo los datos crudos de esta tabla en memoria. Volvé a analizar el archivo.",
+        )
+
+    # Construir serie histórica
+    historical = build_chart_data(
+        df,
+        ChartInterpretation(
+            status="resuelto",
+            measure=req.measure,
+            group_by=req.group_by,
+            time_col=req.time_col,
+            chart_type="line",
+            aggregation="sum",
+        ),
+    )
+
+    if len(historical["labels"]) < 2:
+        raise HTTPException(status_code=400, detail="Muy pocos períodos históricos para recomendar método.")
+
+    results = []
+    for s in historical["series"]:
+        labels, values = historical["labels"], s["values"]
+
+        # Recomendación estadística
+        stat_rec = get_method_recommendation(labels, values, req.user_method)
+
+        ai_rec = None
+        if req.use_ai:
+            ai_config = await load_config()
+            if ai_config.provider != "none":
+                ai_rec = await get_ai_method_recommendation(labels, values, ai_config, req.user_method)
+
+        results.append({
+            "series_name": s["name"],
+            "statistical": stat_rec,
+            "ai": ai_rec,
+        })
+
+    return {"series": results, "available_methods": [m for m in __import__("app.services.forecasting", fromlist=["AVAILABLE_METHODS"]).AVAILABLE_METHODS]}
+
+
+@router.get("/forecast/methods")
+async def list_methods(actor: dict = Depends(require_min_rank("report_viewer"))):
+    """Lista todos los métodos de proyección disponibles."""
+    from app.services.forecasting import AVAILABLE_METHODS
+    return {"methods": AVAILABLE_METHODS}
+
+
 @router.post("/forecast/data")
 async def forecast_data(req: ForecastResolveRequest, actor: dict = Depends(require_min_rank("report_viewer"))):
     df = get_table(req.analysis_id, req.table_label)
@@ -82,13 +159,20 @@ async def forecast_data(req: ForecastResolveRequest, actor: dict = Depends(requi
 
     historical = build_chart_data(
         df,
-        ChartInterpretation(status="resuelto", measure=req.measure, group_by=req.group_by, time_col=req.time_col, chart_type="line", aggregation="sum"),
+        ChartInterpretation(
+            status="resuelto",
+            measure=req.measure,
+            group_by=req.group_by,
+            time_col=req.time_col,
+            chart_type="line",
+            aggregation="sum",
+        ),
     )
 
     if len(historical["labels"]) < 2:
         raise HTTPException(status_code=400, detail="Hay muy pocos períodos históricos para proyectar una tendencia confiable.")
 
-    horizon = max(1, min(req.horizon, 24))  # límite razonable para no proyectar a un plazo absurdo
+    horizon = max(1, min(req.horizon, 24))
     series_out = []
     for s in historical["series"]:
         fc = run_forecast(historical["labels"], s["values"], horizon, req.method)
@@ -100,6 +184,8 @@ async def forecast_data(req: ForecastResolveRequest, actor: dict = Depends(requi
             "forecast_values": fc.forecast_values,
             "lower_bound": fc.lower_bound,
             "upper_bound": fc.upper_bound,
+            "method_used": fc.method,
+            "metadata": fc.metadata,
         })
 
     return {"method": req.method, "measure": req.measure, "group_by": req.group_by, "horizon": horizon, "series": series_out}
