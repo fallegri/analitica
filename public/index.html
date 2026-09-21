@@ -255,8 +255,12 @@
           <div style="flex:1;">
             <label style="color:var(--muted); font-size:0.8rem;">Método</label>
             <select id="forecastMethod" style="width:100%; padding:6px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text);">
-              <option value="lineal">Tendencia lineal</option>
+              <option value="auto">Automático (recomendado por IA)</option>
+              <option value="lineal">Regresión lineal</option>
               <option value="promedio_movil">Promedio móvil</option>
+              <option value="suavizado_exponencial">Suavizado exponencial simple</option>
+              <option value="suavizado_exponencial_tendencia">Holt's linear trend</option>
+              <option value="descomposicion_aditiva">Descomposición aditiva (estacionalidad)</option>
             </select>
           </div>
           <div style="flex:1;">
@@ -269,15 +273,20 @@
           <input type="checkbox" id="forecastUseAi" />
           <label for="forecastUseAi" style="margin:0;">Usar IA para interpretar la pregunta</label>
         </div>
-        <button id="forecastAskBtn" style="margin-top:12px;">Proyectar</button>
+        <div style="display:flex; gap:8px; margin-top:12px;">
+          <button id="forecastRecommendBtn" class="secondary" style="flex:1;">Recomendar método (IA)</button>
+          <button id="forecastAskBtn" style="flex:1;">Proyectar</button>
+        </div>
+        <div id="forecastRecommendation" style="margin-top:8px; font-size:0.8rem; color:var(--muted);"></div>
       </div>
 
       <div id="forecastClarification"></div>
       <div class="explanation-box" id="forecastExplanation"></div>
       <div class="chart-canvas-wrap"><canvas id="forecastCanvas"></canvas></div>
       <p style="color:var(--muted); font-size:0.75rem; margin-top:10px;">
-        La proyección es una extrapolación estadística simple (tendencia lineal o promedio móvil) sobre el historial
-        disponible — no es una predicción garantizada. Cuanto más corto el historial, menos confiable la proyección.
+        La proyección usa métodos estadísticos (regresión lineal, promedio móvil, suavizado exponencial,
+        Holt's trend, descomposición aditiva) sobre el historial disponible — no es una predicción garantizada.
+        Con "Automático", la IA analiza la serie y elige el mejor método. Cuanto más corto el historial, menos confiable la proyección.
       </p>
     </div>
   </div>
@@ -799,6 +808,57 @@ document.getElementById('forecastAskBtn').addEventListener('click', async () => 
     document.getElementById('forecastExplanation').textContent = 'Error: ' + e.message;
   }
 });
+
+document.getElementById('forecastRecommendBtn').addEventListener('click', async () => {
+  const question = document.getElementById('forecastQuestion').value.trim();
+  if (!question) return;
+  const tableLbl = document.getElementById('forecastTableSelect').value;
+  const useAi = document.getElementById('forecastUseAi').checked;
+  document.getElementById('forecastClarification').innerHTML = '';
+  document.getElementById('forecastExplanation').textContent = 'Analizando serie y recomendando método...';
+
+  try {
+    const res = await apiFetch('/api/forecast/recommend-method', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis_id: currentAnalysis.analysis_id, table_label: tableLbl, question, use_ai: useAi }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById('forecastExplanation').textContent = data.detail || 'Error al recomendar método.';
+      return;
+    }
+    renderMethodRecommendation(data);
+  } catch (e) {
+    document.getElementById('forecastExplanation').textContent = 'Error: ' + e.message;
+  }
+});
+
+function renderMethodRecommendation(data) {
+  const box = document.getElementById('forecastRecommendation');
+  if (!data.series || !data.series.length) {
+    box.textContent = 'No se pudo recomendar método.';
+    return;
+  }
+  const s = data.series[0];
+  const stat = s.statistical;
+  const ai = s.ai;
+  let html = `<strong>Serie: ${s.series_name}</strong><br>`;
+  html += `<b>Recomendación estadística:</b> ${stat.recommended_method} (${stat.reasoning?.join(' ') || ''})<br>`;
+  html += `<b>Perfil:</b> n=${stat.profile.n_obs}, tendencia=${stat.profile.has_trend ? 'sí' : 'no'} (${stat.profile.trend_strength?.toFixed(2)}), estacionalidad=${stat.profile.has_seasonality ? 'sí' : 'no'} (${stat.profile.seasonal_strength?.toFixed(2)}), ${stat.profile.stationarity}<br>`;
+  if (ai) {
+    html += `<hr style="margin:4px 0; border-color:var(--border);"><b>Recomendación IA:</b> ${ai.recommended_method} (confianza: ${(ai.confidence * 100).toFixed(0)}%)<br>`;
+    html += `<b>Razonamiento IA:</b> ${ai.reasoning}<br>`;
+    if (ai.warnings?.length) html += `<b>Advertencias:</b> ${ai.warnings.join('; ')}<br>`;
+  }
+  html += `<hr style="margin:4px 0; border-color:var(--border);"><button id="applyRecommendedMethod" class="secondary" style="margin-top:6px;">Usar método recomendado</button>`;
+  box.innerHTML = html;
+
+  document.getElementById('applyRecommendedMethod').addEventListener('click', () => {
+    const method = ai?.recommended_method || stat.recommended_method;
+    document.getElementById('forecastMethod').value = method;
+    document.getElementById('forecastRecommendation').innerHTML = `<span style="color:var(--ok);">Método aplicado: ${method}. Podés proyectar ahora.</span>`;
+  });
+}
 
 function handleForecastInterpretation(tableLbl, result) {
   if (result.status === 'sin_datos_suficientes') {
