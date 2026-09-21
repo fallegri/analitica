@@ -18,9 +18,14 @@ from app.services.auth import hash_password
 
 _DATABASE_URL = os.environ.get("DATABASE_URL")
 _SQLITE_PATH = Path(__file__).resolve().parent.parent / "data" / "users.db"
-_SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
-
+# Directorio se crea perezosamente solo si se usa SQLite (sin DATABASE_URL)
 _pg_pool = None
+
+
+def _ensure_sqlite_dir() -> None:
+    """Crea el directorio para SQLite solo cuando se usa (lazy init)."""
+    if not _DATABASE_URL:  # solo en desarrollo local sin Postgres
+        _SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 async def _get_pg_pool():
@@ -53,6 +58,7 @@ async def close_pg_pool() -> None:
 
 
 def _sqlite_conn() -> sqlite3.Connection:
+    _ensure_sqlite_dir()
     conn = sqlite3.connect(_SQLITE_PATH)
     conn.execute(
         """

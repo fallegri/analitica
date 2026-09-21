@@ -19,9 +19,14 @@ from typing import Any, Optional
 
 _DATABASE_URL = os.environ.get("DATABASE_URL")
 _LOCAL_DIR = Path(__file__).resolve().parent.parent / "data"
-_LOCAL_DIR.mkdir(parents=True, exist_ok=True)
+# Directorio se crea perezosamente solo si se usa almacenamiento local (sin DATABASE_URL)
+_pool = None
 
-_pool = None  # pool de asyncpg, se crea perezosamente solo si hay DATABASE_URL
+
+def _ensure_local_dir() -> None:
+    """Crea el directorio para almacenamiento local solo cuando se usa."""
+    if not _DATABASE_URL:
+        _LOCAL_DIR.mkdir(parents=True, exist_ok=True)
 
 
 async def _get_pool():
@@ -57,6 +62,7 @@ async def get_json(key: str) -> Optional[Any]:
             row = await conn.fetchrow("SELECT value FROM app_config WHERE key = $1", key)
             return json.loads(row["value"]) if row else None
     else:
+        _ensure_local_dir()
         path = _LOCAL_DIR / f"{key}.json"
         if not path.exists():
             return None
@@ -78,6 +84,7 @@ async def set_json(key: str, value: Any) -> None:
                 key, json.dumps(value),
             )
     else:
+        _ensure_local_dir()
         path = _LOCAL_DIR / f"{key}.json"
         path.write_text(json.dumps(value))
 
