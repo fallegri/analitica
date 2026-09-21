@@ -12,7 +12,7 @@ de esta entrega (ver sección "Usuarios y roles"). Para usar otras
 credenciales, pasalas por variables de entorno antes de correr el script:
 
     export ADMIN_USERNAME="fer"
-    export ADMIN_PASSWORD="unaClaveFuerte123"
+    export ADMIN_PASSWORD=
     python3 scripts/seed_admin.py
 
 Es seguro correrlo más de una vez: si el usuario ya existe, no lo toca (no
@@ -31,7 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
 
 DEFAULT_ADMIN_USERNAME = "admin"
-DEFAULT_ADMIN_PASSWORD = "7ataOx1lWVY303x2L2"  # ver README — cambiarla apenas ingreses
+DEFAULT_ADMIN_PASSWORD = ""
 
 SCHEMA_SQL = (Path(__file__).resolve().parent / "schema.sql").read_text()
 
@@ -68,8 +68,10 @@ async def main() -> None:
             user_id, username, hash_password(password), datetime.now(timezone.utc),
         )
         print(f"Usuario super_admin '{username}' creado correctamente.")
-        if password == DEFAULT_ADMIN_PASSWORD:
-            print(f"Contraseña (la del README, cambiala apenas ingreses): {password}")
+        if not DEFAULT_ADMIN_PASSWORD and not os.environ.get("ADMIN_PASSWORD"):
+            print("ADVERTENCIA: No se proveyó ADMIN_PASSWORD. Se usó una contraseña vacía — cámbiala inmediatamente.")
+        elif password == DEFAULT_ADMIN_PASSWORD:
+            print(f"Contraseña (la del README, cámbiala apenas ingreses): {password}")
     finally:
         await conn.close()
 

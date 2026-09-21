@@ -1,0 +1,91 @@
+{
+  "timestamp": "2026-09-20T23:08:55.933860",
+  "overall_score": 87.2,
+  "characteristics": [
+    {
+      "name": "Adecuación Funcional",
+      "score": 50.0,
+      "target": 95.0,
+      "status": "fail",
+      "sub_metrics": {
+        "bdd_coverage": 100.0,
+        "tdd_pass_rate": 0.0
+      }
+    },
+    {
+      "name": "Eficiencia de Desempeño",
+      "score": 95.0,
+      "target": 85.0,
+      "status": "pass",
+      "sub_metrics": {
+        "estimated_p95_ms": 45.0,
+        "memory_peak_mb": 85.0
+      }
+    },
+    {
+      "name": "Compatibilidad",
+      "score": 100.0,
+      "target": 90.0,
+      "status": "pass",
+      "sub_metrics": {
+        "openapi_valid": 1.0,
+        "standard_protocols": 1.0
+      }
+    },
+    {
+      "name": "Usabilidad",
+      "score": 92.0,
+      "target": 90.0,
+      "status": "pass",
+      "sub_metrics": {
+        "clear_error_messages": 96.0,
+        "accessibility_features": 100.0,
+        "help_available": 100.0
+      }
+    },
+    {
+      "name": "Fiabilidad",
+      "score": 98.0,
+      "target": 95.0,
+      "status": "pass",
+      "sub_metrics": {
+        "defect_density_kloc": 0.0,
+        "circuit_breaker": 1.0,
+        "retry_policy": 1.0
+      }
+    },
+    {
+      "name": "Seguridad",
+      "score": 100.0,
+      "target": 90.0,
+      "status": "pass",
+      "sub_metrics": {
+        "owasp_score": 100.0,
+        "critical_vulns": 0,
+        "high_vulns": 0
+      }
+    },
+    {
+      "name": "Mantenibilidad",
+      "score": 92.5,
+      "target": 85.0,
+      "status": "pass",
+      "sub_metrics": {
+        "solid_score": 100.0,
+        "code_coverage": 85.0,
+        "test_count": 53
+      }
+    },
+    {
+      "name": "Portabilidad",
+      "score": 100.0,
+      "target": 80.0,
+      "status": "pass",
+      "sub_metrics": {
+        "os_count": 3.0,
+        "python_versions": 3.0,
+        "install_steps": 1.0
+      }
+    }
+  ]
+}

@@ -43,9 +43,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="PRISM ETL/EDA Assistant", version="1.2.0", lifespan=lifespan)
 
+import os
+_allowed_origins = os.environ.get("ALLOWED_ORIGINS", "").split(",") if os.environ.get("ALLOWED_ORIGINS") else ["http://localhost:8000", "http://127.0.0.1:8000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )

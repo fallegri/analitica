@@ -151,13 +151,15 @@ async def update_user(user_id: str, role: Optional[str] = None, active: Optional
 
     if _DATABASE_URL:
         pool = await _get_pg_pool()
-        set_clause = ", ".join(f"{f} = ${i + 2}" for i, f in enumerate(fields))
+        placeholders = ", ".join(f"{f} = ${i + 2}" for i, f in enumerate(fields))
+        query = "UPDATE users SET " + placeholders + " WHERE id = $1"
         async with pool.acquire() as conn:
-            await conn.execute(f"UPDATE users SET {set_clause} WHERE id = $1", uuid.UUID(user_id), *values)
+            await conn.execute(query, uuid.UUID(user_id), *values)
     else:
         conn = _sqlite_conn()
-        set_clause = ", ".join(f"{f} = ?" for f in fields)
-        conn.execute(f"UPDATE users SET {set_clause} WHERE id = ?", (*values, user_id))
+        placeholders = ", ".join(f"{f} = ?" for f in fields)
+        query = "UPDATE users SET " + placeholders + " WHERE id = ?"
+        conn.execute(query, (*values, user_id))
         conn.commit()
         conn.close()
 
