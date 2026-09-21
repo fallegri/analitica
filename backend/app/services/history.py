@@ -46,6 +46,14 @@ async def _get_pg_pool():
     return _pg_pool
 
 
+async def close_pg_pool() -> None:
+    """Cierra el pool de conexiones Postgres (shutdown de FastAPI/Vercel)."""
+    global _pg_pool
+    if _pg_pool is not None:
+        await _pg_pool.close()
+        _pg_pool = None
+
+
 def _sqlite_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(_SQLITE_PATH)
     conn.execute(

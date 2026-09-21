@@ -27,12 +27,27 @@ Open http://localhost:8000. No database required for basic analysis features.
 - `public/index.html` at root is served by Vercel CDN — do NOT confuse with `backend/frontend/index.html` (local dev only).
 - If `StaticFiles` mount fails, the API (`/api/*`) still works — only HTML on `/` is affected.
 
+**Required Vercel Environment Variables (Project Settings → Environment Variables):**
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | `postgresql://user:pass@ep-xxxx.neon.tech/dbname?sslmode=require` |
+| `JWT_SECRET` | 64-char hex string (generate: `python3 -c "import secrets; print(secrets.token_hex(32))"`) |
+| `ALLOWED_ORIGINS` | `https://your-app.vercel.app` (add multiple comma-separated if needed) |
+
+**Optional:**
+| Variable | Value |
+|---|---|
+| `SUPER_ADMIN_USERNAME` | `admin` (or custom) |
+| `SUPER_ADMIN_PASSWORD` | Secure password (if not set, random one generated at first startup) |
+
 ## Environment variables
 
 | Variable | Required | Notes |
 |---|---|---|
 | `DATABASE_URL` | No (enables persistence) | Neon Postgres connection string with `?sslmode=require` |
 | `JWT_SECRET` | Yes for production | Without it, multi-instance deploys break (intermittent 401s). Generate: `python3 -c "import secrets; print(secrets.token_hex(32))"` |
+| `ALLOWED_ORIGINS` | Yes for production | Comma-separated list of allowed origins for CORS (e.g., `https://your-app.vercel.app`). Default: localhost only. |
 | `SUPER_ADMIN_USERNAME` | No | Default: `admin` |
 | `SUPER_ADMIN_PASSWORD` | No | Default: random (printed once at startup) |
 
@@ -47,7 +62,14 @@ export DATABASE_URL="postgresql://user:pass@ep-xxxx.neon.tech/dbname?sslmode=req
 python3 scripts/seed_admin.py
 ```
 
-Default credentials: `admin` / `7ataOx1lWVY303x2L2` (change immediately). Idempotent — won't overwrite an existing user.
+Default credentials: `admin` / (password from `ADMIN_PASSWORD` env var, or empty — change immediately). Idempotent — won't overwrite an existing user.
+
+To use custom credentials:
+```bash
+export ADMIN_USERNAME="your_username"
+export ADMIN_PASSWORD="your_secure_password"
+python3 scripts/seed_admin.py
+```
 
 ## Auth model
 
@@ -62,7 +84,8 @@ There are no tests, no linter config, no type checker, no CI. The README referen
 ## Gotchas
 
 - `backend/requirements.txt` and root `requirements.txt` are identical copies — Vercel looks for the root one.
-- Vercel Hobby plan: ~4.5 MB body limit, 10s execution timeout. Large Excel files may hit either.
+- Vercel Hobby plan: ~4.5 MB body limit, 10s execution timeout. Large Excel files may hit either. This app enforces a 4MB upload limit in `/api/analyze`.
 - In-memory `data_cache` does not survive serverless cold starts. If charts fail after re-analysis, this is why.
 - The `quality/` engine has 12+ rule files. Adding a new rule means creating a file in `backend/app/services/quality/` and registering it in `engine.py`.
 - Key detection (`key_detection.py`) uses both name patterns AND structural signals (consecutive integers). Column names are user-provided and unpredictable.
+- Connection pools (`asyncpg`) are closed on shutdown via FastAPI lifespan — avoids connection leak warnings in serverless.

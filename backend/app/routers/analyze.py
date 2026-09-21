@@ -244,11 +244,22 @@ async def run_analysis(filename: str, content: bytes, use_ai: bool) -> AnalyzeRe
     return response
 
 
+# Vercel Hobby: ~4.5MB body limit. Ponemos límite conservador.
+MAX_FILE_SIZE = 4 * 1024 * 1024  # 4MB
+
+
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(
     file: UploadFile = File(...),
     use_ai: bool = Query(False, description="Si es true, intenta mejorar las descripciones con el proveedor de IA configurado."),
     actor: dict = Depends(require_min_rank("analista")),
 ) -> AnalyzeResponse:
+    # Verificar tamaño antes de leer todo en memoria
     content = await file.read()
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Archivo demasiado grande ({len(content) / 1024 / 1024:.1f}MB). Límite: {MAX_FILE_SIZE / 1024 / 1024:.0f}MB. "
+                   f"Usá un archivo más pequeño o subí de plan en Vercel."
+        )
     return await run_analysis(file.filename, content, use_ai)

@@ -15,6 +15,9 @@ from app.routers.forecast import router as forecast_router
 from app.routers.history import router as history_router
 from app.routers.synthetic import router as synthetic_router
 from app.routers.users import router as users_router
+from app.services.history import close_pg_pool as close_history_pool
+from app.services.storage import close_pool as close_storage_pool
+from app.services.users import close_pg_pool as close_users_pool
 from app.services.users import ensure_super_admin
 
 
@@ -39,6 +42,13 @@ async def lifespan(app: FastAPI):
         # request, no solo en los que necesitan la base.
         print(f"[PRISM][ADVERTENCIA] No se pudo verificar/crear el super_admin inicial: {e}")
     yield
+    # Shutdown: cerrar pools de conexiones para evitar warnings en serverless
+    try:
+        await close_storage_pool()
+        await close_history_pool()
+        await close_users_pool()
+    except Exception as e:
+        print(f"[PRISM][ADVERTENCIA] Error cerrando pools de BD: {e}")
 
 
 app = FastAPI(title="PRISM ETL/EDA Assistant", version="1.2.0", lifespan=lifespan)
@@ -62,6 +72,12 @@ app.include_router(charts_router, prefix="/api")
 app.include_router(forecast_router, prefix="/api")
 app.include_router(synthetic_router, prefix="/api")
 app.include_router(cleaning_router, prefix="/api")
+
+
+@app.get("/health", include_in_schema=False)
+async def health_check():
+    """Health check endpoint for Vercel monitoring."""
+    return {"status": "ok", "service": "PRISM ETL/EDA Assistant", "version": "1.2.0"}
 
 
 @app.get("/favicon.ico", include_in_schema=False)

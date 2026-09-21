@@ -42,6 +42,14 @@ async def _get_pool():
     return _pool
 
 
+async def close_pool() -> None:
+    """Cierra el pool de conexiones (útil en shutdown de FastAPI/Vercel)."""
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
+
+
 async def get_json(key: str) -> Optional[Any]:
     if _DATABASE_URL:
         pool = await _get_pool()
