@@ -1,6 +1,32 @@
-# PRISM ETL/EDA Assistant — Prototipo v1.1
+# PRISM ETL/EDA Assistant — Prototipo v1.2
 
-Sistema completo con autenticación y roles. Antes de correrlo, ver "Usuarios y roles" abajo.
+## Si te salió "500 FUNCTION_INVOCATION_FAILED" en Vercel
+
+Encontré la causa probable: Vercel cambió su forma de desplegar apps Python/FastAPI —
+ya no usa el `vercel.json` viejo con `builds`/`routes`, y su propia documentación dice
+explícitamente que `app.mount("/public", StaticFiles(...))` **no hace falta** en Vercel
+(hay que usar una carpeta `public/` servida por su CDN en su lugar). Si el mount a la
+carpeta del frontend fallaba por lo que sea en el entorno de Vercel, esa falla ocurría
+al importar el módulo — es decir, tumbaba la función ENTERA en cada request, no solo "/".
+Eso explica un 500 genérico en cualquier página.
+
+Corregido en esta versión:
+- `pyproject.toml` en la raíz con `[tool.vercel] entrypoint = "backend.app.main:app"`
+  (zero-config actual de Vercel, en vez del `vercel.json` con `builds` legacy).
+- El frontend ahora también vive en `public/index.html` en la raíz — Vercel lo sirve
+  directo desde su CDN, sin pasar por la función Python.
+- El mount de `StaticFiles` en `main.py` ahora es defensivo: si la carpeta no está,
+  loguea una advertencia y sigue funcionando (solo se pierde el HTML en `/`, la API en
+  `/api/*` sigue andando) — antes, esa falla tumbaba todo.
+- Migré el arranque de `@app.on_event("startup")` (deprecado) a `lifespan`, que es el
+  patrón que Vercel documenta explícitamente como soportado para FastAPI.
+- `requirements.txt` también copiado a la raíz, por si Vercel lo busca ahí con un
+  entrypoint en un subdirectorio custom.
+
+Con esto **no pude probar contra una cuenta de Vercel real** (sigue siendo la limitación
+de este entorno) — hacé el redeploy y avisame si el error persiste, con el mensaje/ID
+exacto del log de Vercel, para seguir desde ahí.
+
 
 ## Usuarios y roles
 

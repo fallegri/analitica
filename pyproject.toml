@@ -1,0 +1,5 @@
+[tool.vercel]
+# Le dice a Vercel dónde vive el objeto FastAPI `app`, ya que backend/app/main.py
+# no es una de las ubicaciones que detecta automáticamente (root, src/, app/, api/).
+# Ver: https://vercel.com/docs/frameworks/backend/fastapi
+entrypoint = "backend.app.main:app"

@@ -1,9 +1,8 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "backend/app/main.py", "use": "@vercel/python" }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "backend/app/main.py" }
-  ]
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "backend/app/main.py": {
+      "excludeFiles": "{scripts/**,frontend/data/**,**/__pycache__/**,**/*.pyc}"
+    }
+  }
 }
