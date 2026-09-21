@@ -1,0 +1,1264 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>PRISM ETL/EDA Assistant</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --border: #2a2e3a;
+    --text: #e6e8ee; --muted: #8b93a7; --accent: #5eb1ff;
+    --ok: #4ade80; --warn: #fbbf24; --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: 'Segoe UI', system-ui, sans-serif; }
+  header { padding: 16px 28px; border-bottom: 1px solid var(--border); }
+  header h1 { margin:0; font-size: 1.2rem; }
+  header p { margin: 3px 0 0; color: var(--muted); font-size: 0.85rem; }
+  main { display:grid; grid-template-columns: 340px 1fr; height: calc(100vh - 66px); }
+  aside { padding: 18px; border-right: 1px solid var(--border); overflow-y:auto; }
+  .content { display:flex; flex-direction:column; overflow:hidden; }
+
+  .dropzone { border: 2px dashed var(--border); border-radius: 10px; padding: 22px; text-align:center; cursor:pointer; font-size:0.85rem; }
+  .dropzone:hover { border-color: var(--accent); }
+  .dropzone input { display:none; }
+  button { background: var(--accent); color:#0a0d13; border:none; padding: 9px 16px; border-radius: 6px; font-weight:600; cursor:pointer; font-size:0.85rem; }
+  button:disabled { opacity:0.5; cursor:not-allowed; }
+  button.secondary { background:#232838; color:var(--text); }
+
+  details.panel { border: 1px solid var(--border); border-radius: 8px; margin-top: 16px; }
+  details.panel summary { padding: 9px 12px; cursor:pointer; font-weight:600; font-size:0.85rem; }
+  .panel-body { padding: 0 12px 12px; font-size:0.82rem; }
+  .panel-body label { display:block; color: var(--muted); margin-top:8px; font-size:0.78rem; }
+  .panel-body select, .panel-body input, .panel-body textarea { width:100%; padding:6px 7px; margin-top:3px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:0.82rem; font-family:inherit; }
+  .status-line { font-size:0.78rem; margin-top:6px; }
+  .status-line.ok { color: var(--ok); }
+  .status-line.err { color: var(--danger); }
+  .checkbox-row { display:flex; align-items:center; gap:6px; margin-top:10px; font-size:0.8rem; color: var(--muted); }
+  .checkbox-row input { width:auto; margin:0; }
+
+  .history-item { padding:6px 0; border-bottom:1px solid var(--border); cursor:pointer; font-size:0.8rem; }
+  .history-item:hover { color: var(--accent); }
+  .history-item .h-meta { color: var(--muted); font-size:0.72rem; }
+
+  nav.tabs { display:flex; gap:2px; padding: 10px 20px 0; border-bottom:1px solid var(--border); flex-shrink:0; }
+  nav.tabs button { background:none; color:var(--muted); border:none; border-bottom:2px solid transparent; border-radius:0; padding:8px 14px; font-size:0.85rem; }
+  nav.tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  nav.tabs button:disabled { opacity:0.35; cursor:not-allowed; }
+
+  .tab-panel { display:none; padding: 20px 28px; overflow-y:auto; flex:1; }
+  .tab-panel.active { display:block; }
+  .empty { color: var(--muted); text-align:center; padding: 60px 0; font-size:0.9rem; }
+
+  .table-block { margin-bottom: 30px; }
+  .table-title { font-size:1rem; margin-bottom:10px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.72rem; background:#232838; color:var(--accent); margin-left:6px; }
+
+  table.data-table { width:100%; border-collapse: collapse; font-size:0.82rem; margin-bottom:10px; }
+  table.data-table th, table.data-table td { text-align:left; padding: 7px 9px; border-bottom: 1px solid var(--border); }
+  table.data-table th { color: var(--muted); font-weight:600; }
+
+  .log-entry { font-size:0.8rem; padding: 5px 0; border-bottom: 1px solid var(--border); color: var(--muted); }
+  .log-entry b { color: var(--accent); }
+  .log-step-header { color: var(--text); font-weight:600; margin-top:12px; font-size:0.85rem; }
+
+  .sev-alta { color: var(--danger); } .sev-media { color: var(--warn); } .sev-baja { color: var(--muted); }
+
+  .stat-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap:10px; margin-bottom:16px; }
+  .stat-card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:0.8rem; }
+  .stat-card .stat-name { color:var(--accent); font-weight:600; margin-bottom:4px; }
+  .suggestion-item { font-size:0.85rem; padding:5px 0; }
+  .suggestion-item::before { content: "→ "; color: var(--accent); }
+  .ai-narrative-box { background:#141824; border:1px solid var(--accent); border-radius:8px; padding:12px 14px; font-size:0.85rem; margin-top:10px; line-height:1.5; }
+
+  .schema-shape { display:inline-block; padding:3px 10px; border-radius:10px; background:#1e2636; color:var(--accent); font-weight:600; margin-bottom:14px; }
+  .rel-row { font-size:0.85rem; padding:6px 0; border-bottom:1px solid var(--border); }
+  .conf-alta { color: var(--ok); } .conf-media { color: var(--warn); } .conf-baja { color: var(--muted); }
+
+  .chart-form { max-width: 640px; }
+  .clarify-box { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px; margin-top:14px; }
+  .clarify-field { margin-top:10px; }
+  .chart-canvas-wrap { max-width: 800px; margin-top: 20px; }
+  .explanation-box { font-size:0.82rem; color: var(--muted); margin-top:10px; }
+
+  #loginScreen { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:var(--bg); z-index:100; }
+  .login-box { width:320px; background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:28px; }
+  .login-box h2 { margin:0 0 4px; font-size:1.1rem; }
+  .login-box p { margin:0 0 18px; color:var(--muted); font-size:0.8rem; }
+  .login-box input { width:100%; padding:9px; margin-top:10px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:0.85rem; }
+  .login-box button { width:100%; margin-top:16px; }
+  .login-error { color:var(--danger); font-size:0.8rem; margin-top:10px; }
+
+  header { display:flex; justify-content:space-between; align-items:center; }
+  .user-badge { display:flex; align-items:center; gap:10px; font-size:0.8rem; color:var(--muted); }
+  .user-badge .role-pill { background:#1e2636; color:var(--accent); padding:3px 9px; border-radius:10px; font-size:0.72rem; }
+  .user-badge button { padding:6px 12px; font-size:0.78rem; }
+
+  .users-table td, .users-table th { font-size:0.78rem; }
+  .role-select-inline { padding:3px 5px; font-size:0.75rem; background:#0d0f16; border:1px solid var(--border); border-radius:4px; color:var(--text); }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h2>PRISM ETL/EDA Assistant</h2>
+    <p>Iniciá sesión para continuar.</p>
+    <input type="text" id="loginUsername" placeholder="Usuario" autocomplete="username" />
+    <input type="password" id="loginPassword" placeholder="Contraseña" autocomplete="current-password" />
+    <button id="loginBtn" style="width:100%;">Ingresar</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div id="appMain" style="display:none;">
+<header>
+  <div>
+    <h1>PRISM ETL/EDA Assistant</h1>
+    <p>Ingesta → diccionario → calidad → esquema → análisis → gráficos, con IA opcional en cada paso.</p>
+  </div>
+  <div class="user-badge">
+    <span id="userDisplay"></span>
+    <span class="role-pill" id="userRolePill"></span>
+    <button class="secondary" id="logoutBtn">Cerrar sesión</button>
+  </div>
+</header>
+<main>
+  <aside>
+    <div class="dropzone" id="dropzone">
+      <p id="dz-text">Hacé clic para elegir un archivo (.xlsx, .xls, .csv)</p>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+    </div>
+    <button id="analyzeBtn" disabled style="margin-top:10px; width:100%;">Analizar archivo</button>
+
+    <details class="panel">
+      <summary>Generar datos sintéticos</summary>
+      <div class="panel-body">
+        <label>Variante</label>
+        <select id="syntheticVariant"></select>
+        <p id="syntheticDesc" style="color:var(--muted); font-size:0.75rem; margin:6px 0 0;"></p>
+        <label>Cantidad de registros</label>
+        <input type="number" id="syntheticN" min="50" max="20000" />
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button id="syntheticAnalyzeBtn" type="button" style="flex:1;">Generar y analizar</button>
+          <button id="syntheticDownloadBtn" type="button" class="secondary" style="flex:1;">Descargar .xlsx</button>
+        </div>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>Configuración de IA</summary>
+      <div class="panel-body">
+        <label>Proveedor</label>
+        <select id="aiProvider"></select>
+        <label>API Key</label>
+        <input type="password" id="aiApiKey" placeholder="Dejar vacío si no aplica" />
+        <label>Base URL (opcional)</label>
+        <input type="text" id="aiBaseUrl" placeholder="ej: http://localhost:11434" />
+        <label>Modelo (opcional)</label>
+        <input type="text" id="aiModel" placeholder="ej: meta/llama-3.1-8b-instruct" />
+        <button id="aiSaveBtn" type="button" style="margin-top:10px; width:100%;">Guardar y probar conexión</button>
+        <div class="status-line" id="aiStatus"></div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="useAiCheckbox" />
+          <label for="useAiCheckbox" style="margin:0;">Usar IA al analizar (descripciones + insights)</label>
+        </div>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary>Historial de análisis</summary>
+      <div class="panel-body" id="historyList"></div>
+    </details>
+
+    <details class="panel" id="usersPanel" style="display:none;">
+      <summary>Usuarios</summary>
+      <div class="panel-body">
+        <table class="users-table" style="width:100%; border-collapse:collapse;">
+          <thead><tr><th>Usuario</th><th>Rol</th><th>Activo</th><th></th></tr></thead>
+          <tbody id="usersTableBody"></tbody>
+        </table>
+        <label style="margin-top:12px;">Nuevo usuario</label>
+        <input type="text" id="newUserUsername" placeholder="usuario" />
+        <input type="password" id="newUserPassword" placeholder="contraseña (mín. 8 caracteres)" />
+        <select id="newUserRole"></select>
+        <button id="createUserBtn" type="button" style="margin-top:8px; width:100%;">Crear usuario</button>
+        <div class="status-line" id="userMgmtStatus"></div>
+      </div>
+    </details>
+  </aside>
+
+  <div class="content">
+    <nav class="tabs">
+      <button data-tab="log" class="active">Log</button>
+      <button data-tab="dictionary" disabled>Diccionario</button>
+      <button data-tab="quality" disabled>Calidad</button>
+      <button data-tab="cleaning" disabled>Limpieza</button>
+      <button data-tab="schema" disabled>Esquema</button>
+      <button data-tab="insights" disabled>Análisis</button>
+      <button data-tab="charts" disabled>Gráficos</button>
+      <button data-tab="forecast" disabled>Proyección</button>
+    </nav>
+
+    <div class="tab-panel active" id="tab-log">
+      <div class="empty" id="logEmpty">Analizá un archivo o abrí uno del historial para ver el log del proceso.</div>
+      <div id="logContent"></div>
+    </div>
+
+    <div class="tab-panel" id="tab-dictionary"><div id="dictionaryContent"></div></div>
+    <div class="tab-panel" id="tab-quality"><div id="qualityContent"></div></div>
+    <div class="tab-panel" id="tab-cleaning">
+      <div class="chart-form">
+        <label style="color:var(--muted); font-size:0.8rem;">Tabla</label>
+        <select id="cleaningTableSelect" style="width:100%; padding:7px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text);"></select>
+        <p style="color:var(--muted); font-size:0.8rem; margin-top:10px;">
+          Aplica una corrección automática por cada hallazgo de calidad que tiene un arreglo razonable
+          (nulos, negativos, atípicos, fechas, moneda, ciudades, categorías, duplicados). Los conflictos
+          de criterio de negocio (precios/códigos inconsistentes) no se tocan — quedan para revisión manual.
+        </p>
+        <button id="cleanApplyBtn" style="margin-top:6px;">Aplicar correcciones y re-analizar</button>
+      </div>
+      <div id="cleaningResult"></div>
+    </div>
+    <div class="tab-panel" id="tab-schema"><div id="schemaContent"></div></div>
+    <div class="tab-panel" id="tab-insights"><div id="insightsContent"></div></div>
+
+    <div class="tab-panel" id="tab-charts">
+      <div class="chart-form">
+        <label style="color:var(--muted); font-size:0.8rem;">Tabla</label>
+        <select id="chartTableSelect" style="width:100%; padding:7px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text);"></select>
+
+        <label style="color:var(--muted); font-size:0.8rem; margin-top:12px; display:block;">¿Qué deseas encontrar o ver?</label>
+        <textarea id="chartQuestion" rows="2" placeholder="ej: quiero ver la venta de productos a lo largo del trimestre" style="width:100%; padding:8px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:inherit;"></textarea>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="chartUseAi" />
+          <label for="chartUseAi" style="margin:0;">Usar IA para interpretar la pregunta</label>
+        </div>
+        <button id="chartAskBtn" style="margin-top:12px;">Consultar</button>
+      </div>
+
+      <div id="chartClarification"></div>
+      <div class="explanation-box" id="chartExplanation"></div>
+      <div class="chart-canvas-wrap"><canvas id="chartCanvas"></canvas></div>
+    </div>
+
+    <div class="tab-panel" id="tab-forecast">
+      <div class="chart-form">
+        <label style="color:var(--muted); font-size:0.8rem;">Tabla</label>
+        <select id="forecastTableSelect" style="width:100%; padding:7px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text);"></select>
+
+        <label style="color:var(--muted); font-size:0.8rem; margin-top:12px; display:block;">¿Qué querés proyectar?</label>
+        <textarea id="forecastQuestion" rows="2" placeholder="ej: quiero proyectar la venta de productos para el próximo trimestre" style="width:100%; padding:8px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text); font-family:inherit;"></textarea>
+
+        <div style="display:flex; gap:10px; margin-top:10px;">
+          <div style="flex:1;">
+            <label style="color:var(--muted); font-size:0.8rem;">Método</label>
+            <select id="forecastMethod" style="width:100%; padding:6px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text);">
+              <option value="lineal">Tendencia lineal</option>
+              <option value="promedio_movil">Promedio móvil</option>
+            </select>
+          </div>
+          <div style="flex:1;">
+            <label style="color:var(--muted); font-size:0.8rem;">Horizonte (períodos/meses)</label>
+            <input type="number" id="forecastHorizon" min="1" max="24" value="3" style="width:100%; padding:6px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text);" />
+          </div>
+        </div>
+
+        <div class="checkbox-row">
+          <input type="checkbox" id="forecastUseAi" />
+          <label for="forecastUseAi" style="margin:0;">Usar IA para interpretar la pregunta</label>
+        </div>
+        <button id="forecastAskBtn" style="margin-top:12px;">Proyectar</button>
+      </div>
+
+      <div id="forecastClarification"></div>
+      <div class="explanation-box" id="forecastExplanation"></div>
+      <div class="chart-canvas-wrap"><canvas id="forecastCanvas"></canvas></div>
+      <p style="color:var(--muted); font-size:0.75rem; margin-top:10px;">
+        La proyección es una extrapolación estadística simple (tendencia lineal o promedio móvil) sobre el historial
+        disponible — no es una predicción garantizada. Cuanto más corto el historial, menos confiable la proyección.
+      </p>
+    </div>
+  </div>
+</main>
+</div><!-- /appMain -->
+
+<script>
+// ---------- Autenticación ----------
+let authToken = localStorage.getItem('prism_token') || null;
+let currentUser = null; // {username, role, role_label}
+
+async function apiFetch(url, options = {}) {
+  const headers = Object.assign({}, options.headers || {});
+  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const res = await window.fetch(url, Object.assign({}, options, { headers }));
+  if (res.status === 401) {
+    doLogout();
+  }
+  return res;
+}
+
+function doLogout() {
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem('prism_token');
+  document.getElementById('appMain').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+document.getElementById('logoutBtn').addEventListener('click', doLogout);
+
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if (!username || !password) return;
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errEl.textContent = data.detail || 'Usuario o contraseña incorrectos.';
+      return;
+    }
+    authToken = data.token;
+    localStorage.setItem('prism_token', authToken);
+    await onAuthenticated({ username: data.username, role: data.role, role_label: data.role_label });
+  } catch (e) {
+    errEl.textContent = 'No se pudo conectar con el servidor: ' + e.message;
+  }
+}
+
+async function onAuthenticated(user) {
+  currentUser = user;
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appMain').style.display = 'block';
+  document.getElementById('userDisplay').textContent = user.username;
+  document.getElementById('userRolePill').textContent = user.role_label;
+  applyRolePermissions(user.role);
+  await initAppData();
+}
+
+function applyRolePermissions(role) {
+  const isAnalystOrAbove = ['analista', 'admin', 'super_admin'].includes(role);
+  const isAdminOrAbove = ['admin', 'super_admin'].includes(role);
+
+  // report_viewer: sin carga de archivos, sin datos sintéticos, sin limpieza
+  document.getElementById('dropzone').style.display = isAnalystOrAbove ? '' : 'none';
+  document.getElementById('analyzeBtn').style.display = isAnalystOrAbove ? '' : 'none';
+  const syntheticPanel = document.getElementById('syntheticVariant').closest('details.panel');
+  if (syntheticPanel) syntheticPanel.style.display = isAnalystOrAbove ? '' : 'none';
+  document.querySelector('nav.tabs button[data-tab="cleaning"]').style.display = isAnalystOrAbove ? '' : 'none';
+
+  // configuración de IA: cualquiera ve, solo admin+ guarda
+  document.getElementById('aiSaveBtn').style.display = isAdminOrAbove ? '' : 'none';
+  document.getElementById('aiApiKey').disabled = !isAdminOrAbove;
+  document.getElementById('aiBaseUrl').disabled = !isAdminOrAbove;
+  document.getElementById('aiModel').disabled = !isAdminOrAbove;
+  document.getElementById('aiProvider').disabled = !isAdminOrAbove;
+
+  // gestión de usuarios: solo admin+
+  document.getElementById('usersPanel').style.display = isAdminOrAbove ? '' : 'none';
+}
+
+async function initAppData() {
+  await loadAiProviders();
+  await loadAiConfig();
+  await loadSyntheticVariants();
+  await loadHistory();
+  if (['admin', 'super_admin'].includes(currentUser.role)) {
+    await loadUsers();
+  }
+}
+
+async function tryResumeSession() {
+  if (!authToken) return;
+  try {
+    const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${authToken}` } });
+    if (!res.ok) { doLogout(); return; }
+    const data = await res.json();
+    await onAuthenticated(data);
+  } catch {
+    doLogout();
+  }
+}
+
+// ---------- Estado global ----------
+let currentAnalysis = null;
+let chartInstance = null;
+
+// ---------- Tabs ----------
+document.querySelectorAll('nav.tabs button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+function enableTabs() {
+  document.querySelectorAll('nav.tabs button').forEach(b => b.disabled = false);
+}
+
+// ---------- Subida de archivo ----------
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const dzText = document.getElementById('dz-text');
+const analyzeBtn = document.getElementById('analyzeBtn');
+let selectedFile = null;
+
+dropzone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) {
+    selectedFile = fileInput.files[0];
+    dzText.textContent = `Archivo listo: ${selectedFile.name}`;
+    analyzeBtn.disabled = false;
+  }
+});
+
+analyzeBtn.addEventListener('click', async () => {
+  if (!selectedFile) return;
+  analyzeBtn.disabled = true;
+  const formData = new FormData();
+  formData.append('file', selectedFile);
+  const useAi = document.getElementById('useAiCheckbox').checked ? 'true' : 'false';
+
+  try {
+    const res = await apiFetch(`/api/analyze?use_ai=${useAi}`, { method: 'POST', body: formData });
+    if (!res.ok) {
+      const err = await res.json();
+      alert('Error al analizar: ' + (err.detail || 'desconocido'));
+      analyzeBtn.disabled = false;
+      return;
+    }
+    currentAnalysis = await res.json();
+    renderAll();
+    await loadHistory();
+  } catch (e) {
+    alert('No se pudo conectar con el servidor: ' + e.message);
+  }
+  analyzeBtn.disabled = false;
+});
+
+// ---------- Render maestro ----------
+function renderAll() {
+  if (!currentAnalysis) return;
+  enableTabs();
+  renderLog();
+  renderDictionary();
+  renderQuality();
+  renderSchema();
+  renderInsights();
+  populateChartTableSelect();
+  document.getElementById('chartClarification').innerHTML = '';
+  document.getElementById('chartExplanation').innerHTML = '';
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  document.getElementById('forecastClarification').innerHTML = '';
+  document.getElementById('forecastExplanation').innerHTML = '';
+  if (forecastInstance) { forecastInstance.destroy(); forecastInstance = null; }
+  document.getElementById('cleaningResult').innerHTML = '';
+}
+
+function tableLabel(t) { return `${t.sheet_name} (tabla ${t.table_index + 1})`; }
+
+// ---------- Log ----------
+function renderLog() {
+  document.getElementById('logEmpty').style.display = 'none';
+  const el = document.getElementById('logContent');
+  el.innerHTML = '';
+  let lastStep = null;
+  currentAnalysis.process_log.forEach(e => {
+    if (e.step !== lastStep) {
+      const header = document.createElement('div');
+      header.className = 'log-step-header';
+      header.textContent = e.step;
+      el.appendChild(header);
+      lastStep = e.step;
+    }
+    const div = document.createElement('div');
+    div.className = 'log-entry';
+    div.innerHTML = `· ${e.message}`;
+    el.appendChild(div);
+  });
+}
+
+// ---------- Diccionario ----------
+function renderDictionary() {
+  const el = document.getElementById('dictionaryContent');
+  el.innerHTML = '';
+  currentAnalysis.tables.forEach(t => {
+    const block = document.createElement('div');
+    block.className = 'table-block';
+    block.innerHTML = `<div class="table-title">${tableLabel(t)} <span class="badge">${t.row_count} filas · ${t.column_count} columnas</span></div>`;
+    const table = document.createElement('table');
+    table.className = 'data-table';
+    table.innerHTML = `
+      <thead><tr><th>Encabezado original</th><th>Nombre sugerido</th><th>Tipo</th><th>Nulos</th><th>Únicos</th><th>Descripción</th></tr></thead>
+      <tbody>${t.dictionary.map(d => `
+        <tr>
+          <td>${d.original_header}</td><td>${d.suggested_name}</td><td>${d.inferred_type}</td>
+          <td>${d.null_count} (${d.null_pct}%)</td><td>${d.unique_count}</td><td>${d.description}</td>
+        </tr>`).join('')}</tbody>`;
+    block.appendChild(table);
+    el.appendChild(block);
+  });
+}
+
+// ---------- Calidad ----------
+function renderQuality() {
+  const el = document.getElementById('qualityContent');
+  el.innerHTML = '';
+  currentAnalysis.tables.forEach(t => {
+    const block = document.createElement('div');
+    block.className = 'table-block';
+    block.innerHTML = `<div class="table-title">${tableLabel(t)} <span class="badge">${t.quality_findings.length} hallazgo(s)</span></div>`;
+    if (t.quality_findings.length) {
+      const table = document.createElement('table');
+      table.className = 'data-table';
+      table.innerHTML = `
+        <thead><tr><th>Severidad</th><th>Regla</th><th>Columna(s)</th><th>Cantidad</th><th>Detalle</th></tr></thead>
+        <tbody>${t.quality_findings.map(f => `
+          <tr>
+            <td class="sev-${f.severity}">${f.severity.toUpperCase()}</td><td>${f.rule_name}</td>
+            <td>${f.columns.join(', ')}</td><td>${f.count}</td><td>${f.detail}</td>
+          </tr>`).join('')}</tbody>`;
+      block.appendChild(table);
+    } else {
+      block.innerHTML += '<div style="color:var(--muted); font-size:0.85rem;">Sin hallazgos de calidad.</div>';
+    }
+    el.appendChild(block);
+  });
+}
+
+// ---------- Esquema ----------
+function renderSchema() {
+  const el = document.getElementById('schemaContent');
+  el.innerHTML = '';
+  const schema = currentAnalysis.schema_detection;
+  if (!schema) {
+    el.innerHTML = '<div class="empty">Se necesitan 2 o más tablas en el archivo para sugerir un esquema.</div>';
+    return;
+  }
+  const shapeLabels = { estrella: 'Esquema tipo ESTRELLA', copo_de_nieve: 'Esquema tipo COPO DE NIEVE', sin_relaciones_claras: 'Sin relaciones claras entre tablas' };
+  el.innerHTML = `<div class="schema-shape">${shapeLabels[schema.shape] || schema.shape}</div>`;
+  schema.tables.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'rel-row';
+    row.innerHTML = `<b>${t.table_label}</b> → rol sugerido: <span class="badge">${t.role}</span> ${t.key_columns.length ? '· claves: ' + t.key_columns.join(', ') : ''}`;
+    el.appendChild(row);
+  });
+  if (schema.relationships.length) {
+    const relTitle = document.createElement('div');
+    relTitle.className = 'table-title';
+    relTitle.style.marginTop = '18px';
+    relTitle.textContent = `Relaciones sugeridas (confirmá antes de enlazar)`;
+    el.appendChild(relTitle);
+    schema.relationships.forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'rel-row';
+      row.innerHTML = `${r.from_table}.<b>${r.from_column}</b> ↔ ${r.to_table}.<b>${r.to_column}</b> — solapamiento ${Math.round(r.overlap_ratio*100)}% <span class="conf-${r.confidence}">(confianza ${r.confidence})</span>`;
+      el.appendChild(row);
+    });
+  }
+}
+
+// ---------- Análisis (EDA) ----------
+function renderInsights() {
+  const el = document.getElementById('insightsContent');
+  el.innerHTML = '';
+  currentAnalysis.tables.forEach(t => {
+    const ins = t.insights;
+    if (!ins) return;
+    const block = document.createElement('div');
+    block.className = 'table-block';
+    block.innerHTML = `<div class="table-title">${tableLabel(t)}</div>`;
+
+    if (ins.numeric_stats.length) {
+      block.innerHTML += `<div style="color:var(--muted); font-size:0.85rem; margin-bottom:6px;">Estadísticas descriptivas</div>`;
+      const grid = document.createElement('div');
+      grid.className = 'stat-grid';
+      grid.innerHTML = ins.numeric_stats.map(s => `
+        <div class="stat-card"><div class="stat-name">${s.column}</div>
+        media ${s.mean} · mediana ${s.median}<br/>rango [${s.min}, ${s.max}] · Q1 ${s.q1} / Q3 ${s.q3}</div>`).join('');
+      block.appendChild(grid);
+    }
+
+    if (ins.category_frequencies.length) {
+      block.innerHTML += `<div style="color:var(--muted); font-size:0.85rem; margin:10px 0 6px;">Valores más frecuentes</div>`;
+      const grid = document.createElement('div');
+      grid.className = 'stat-grid';
+      grid.innerHTML = ins.category_frequencies.map(f => `
+        <div class="stat-card"><div class="stat-name">${f.column}</div>
+        ${f.top_values.map(v => `${v[0]}: ${v[1]} (${v[2]}%)`).join('<br/>')}</div>`).join('');
+      block.appendChild(grid);
+    }
+
+    if (ins.correlations.length) {
+      block.innerHTML += `<div style="color:var(--muted); font-size:0.85rem; margin:10px 0 6px;">Correlaciones</div>`;
+      ins.correlations.forEach(c => {
+        const row = document.createElement('div');
+        row.className = 'rel-row';
+        row.innerHTML = `<b>${c.column_a}</b> ↔ <b>${c.column_b}</b> — r=${c.correlation} (${c.strength})`;
+        block.appendChild(row);
+      });
+    }
+
+    if (ins.suggested_analyses.length) {
+      block.innerHTML += `<div style="color:var(--muted); font-size:0.85rem; margin:10px 0 6px;">Análisis sugeridos</div>`;
+      ins.suggested_analyses.forEach(s => {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        item.textContent = s;
+        block.appendChild(item);
+      });
+    }
+
+    if (ins.ai_narrative) {
+      const box = document.createElement('div');
+      box.className = 'ai-narrative-box';
+      box.innerHTML = `<b>Lectura generada por IA:</b><br/>${ins.ai_narrative}`;
+      block.appendChild(box);
+    }
+
+    el.appendChild(block);
+  });
+}
+
+// ---------- Gráficos ----------
+function populateChartTableSelect() {
+  const sel = document.getElementById('chartTableSelect');
+  sel.innerHTML = currentAnalysis.tables.map(t => `<option value="${tableLabel(t)}">${tableLabel(t)}</option>`).join('');
+  const selF = document.getElementById('forecastTableSelect');
+  selF.innerHTML = sel.innerHTML;
+  const selC = document.getElementById('cleaningTableSelect');
+  selC.innerHTML = sel.innerHTML;
+}
+
+function suggestChartTypeJs(measure, groupBy, timeCol) {
+  if (timeCol && measure) return 'line';
+  if (groupBy && measure) return 'bar';
+  return 'bar';
+}
+
+document.getElementById('chartAskBtn').addEventListener('click', async () => {
+  const question = document.getElementById('chartQuestion').value.trim();
+  if (!question) return;
+  const tableLbl = document.getElementById('chartTableSelect').value;
+  const useAi = document.getElementById('chartUseAi').checked;
+  document.getElementById('chartClarification').innerHTML = '';
+  document.getElementById('chartExplanation').innerHTML = 'Consultando...';
+
+  try {
+    const res = await apiFetch('/api/charts/interpret', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis_id: currentAnalysis.analysis_id, table_label: tableLbl, question, use_ai: useAi }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      document.getElementById('chartExplanation').textContent = result.detail || 'Error al interpretar la pregunta.';
+      return;
+    }
+    handleInterpretation(tableLbl, result);
+  } catch (e) {
+    document.getElementById('chartExplanation').textContent = 'Error: ' + e.message;
+  }
+});
+
+function handleInterpretation(tableLbl, result) {
+  if (result.status === 'sin_datos_suficientes') {
+    document.getElementById('chartExplanation').textContent = result.explanation.join(' ');
+    return;
+  }
+  if (result.status === 'ambiguo') {
+    renderClarification(tableLbl, result);
+    return;
+  }
+  document.getElementById('chartExplanation').textContent = result.explanation.join(' ');
+  fetchChartData(tableLbl, result.measure, result.group_by, result.time_col, result.chart_type, result.aggregation);
+}
+
+function renderClarification(tableLbl, result) {
+  const box = document.createElement('div');
+  box.className = 'clarify-box';
+  box.innerHTML = '<div style="font-weight:600; margin-bottom:6px;">Necesito que aclares esto para armar el gráfico:</div>';
+
+  result.clarifications.forEach(c => {
+    const field = document.createElement('div');
+    field.className = 'clarify-field';
+    field.innerHTML = `
+      <label style="color:var(--muted); font-size:0.8rem;">${c.question}</label>
+      <select data-field="${c.field}" style="width:100%; padding:6px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text);">
+        ${c.options.map(o => `<option value="${o}">${o}</option>`).join('')}
+      </select>`;
+    box.appendChild(field);
+  });
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.textContent = 'Confirmar';
+  confirmBtn.style.marginTop = '12px';
+  confirmBtn.addEventListener('click', () => {
+    let measure = result.measure;
+    let groupBy = result.group_by;
+    box.querySelectorAll('select[data-field]').forEach(sel => {
+      if (sel.dataset.field === 'measure') measure = sel.value;
+      if (sel.dataset.field === 'group_by') groupBy = sel.value;
+    });
+    const chartType = suggestChartTypeJs(measure, groupBy, result.time_col);
+    document.getElementById('chartClarification').innerHTML = '';
+    document.getElementById('chartExplanation').textContent =
+      `Medida: '${measure}'.${groupBy ? ` Agrupado por: '${groupBy}'.` : ''}${result.time_col ? ` En el tiempo: '${result.time_col}'.` : ''} Tipo de gráfico: ${chartType}.`;
+    fetchChartData(tableLbl, measure, groupBy, result.time_col, chartType, 'sum');
+  });
+  box.appendChild(confirmBtn);
+
+  document.getElementById('chartClarification').innerHTML = '';
+  document.getElementById('chartClarification').appendChild(box);
+}
+
+async function fetchChartData(tableLbl, measure, groupBy, timeCol, chartType, aggregation) {
+  try {
+    const res = await apiFetch('/api/charts/data', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        analysis_id: currentAnalysis.analysis_id, table_label: tableLbl,
+        measure, group_by: groupBy, time_col: timeCol, chart_type: chartType, aggregation,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById('chartExplanation').textContent = data.detail || 'Error al generar el gráfico.';
+      return;
+    }
+    drawChart(data);
+  } catch (e) {
+    document.getElementById('chartExplanation').textContent = 'Error: ' + e.message;
+  }
+}
+
+function drawChart(data) {
+  const ctx = document.getElementById('chartCanvas').getContext('2d');
+  if (chartInstance) chartInstance.destroy();
+  const palette = ['#5eb1ff', '#4ade80', '#fbbf24', '#f87171', '#c084fc', '#38bdf8'];
+  chartInstance = new Chart(ctx, {
+    type: data.chart_type === 'line' ? 'line' : 'bar',
+    data: {
+      labels: data.labels,
+      datasets: data.series.map((s, i) => ({
+        label: s.name,
+        data: s.values,
+        backgroundColor: palette[i % palette.length],
+        borderColor: palette[i % palette.length],
+        fill: false,
+        tension: 0.25,
+      })),
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#e6e8ee' } } },
+      scales: {
+        x: { ticks: { color: '#8b93a7' }, grid: { color: '#2a2e3a' } },
+        y: { ticks: { color: '#8b93a7' }, grid: { color: '#2a2e3a' } },
+      },
+    },
+  });
+}
+
+// ---------- Proyección ----------
+let forecastInstance = null;
+
+document.getElementById('forecastAskBtn').addEventListener('click', async () => {
+  const question = document.getElementById('forecastQuestion').value.trim();
+  if (!question) return;
+  const tableLbl = document.getElementById('forecastTableSelect').value;
+  const useAi = document.getElementById('forecastUseAi').checked;
+  document.getElementById('forecastClarification').innerHTML = '';
+  document.getElementById('forecastExplanation').textContent = 'Consultando...';
+
+  try {
+    const res = await apiFetch('/api/forecast/interpret', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis_id: currentAnalysis.analysis_id, table_label: tableLbl, question, use_ai: useAi }),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      document.getElementById('forecastExplanation').textContent = result.detail || 'Error al interpretar la pregunta.';
+      return;
+    }
+    if (result.horizon) document.getElementById('forecastHorizon').value = result.horizon;
+    handleForecastInterpretation(tableLbl, result);
+  } catch (e) {
+    document.getElementById('forecastExplanation').textContent = 'Error: ' + e.message;
+  }
+});
+
+function handleForecastInterpretation(tableLbl, result) {
+  if (result.status === 'sin_datos_suficientes') {
+    document.getElementById('forecastExplanation').textContent = result.explanation.join(' ');
+    return;
+  }
+  if (result.status === 'ambiguo') {
+    renderForecastClarification(tableLbl, result);
+    return;
+  }
+  document.getElementById('forecastExplanation').textContent = result.explanation.join(' ');
+  runForecast(tableLbl, result.measure, result.group_by, result.time_col);
+}
+
+function renderForecastClarification(tableLbl, result) {
+  const box = document.createElement('div');
+  box.className = 'clarify-box';
+  box.innerHTML = '<div style="font-weight:600; margin-bottom:6px;">Necesito que aclares esto para proyectar:</div>';
+
+  result.clarifications.forEach(c => {
+    const field = document.createElement('div');
+    field.className = 'clarify-field';
+    field.innerHTML = `
+      <label style="color:var(--muted); font-size:0.8rem;">${c.question}</label>
+      <select data-field="${c.field}" style="width:100%; padding:6px; margin-top:4px; background:#0d0f16; border:1px solid var(--border); border-radius:5px; color:var(--text);">
+        ${c.options.map(o => `<option value="${o}">${o}</option>`).join('')}
+      </select>`;
+    box.appendChild(field);
+  });
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.textContent = 'Confirmar';
+  confirmBtn.style.marginTop = '12px';
+  confirmBtn.addEventListener('click', () => {
+    let measure = result.measure, groupBy = result.group_by, timeCol = result.time_col;
+    box.querySelectorAll('select[data-field]').forEach(sel => {
+      if (sel.dataset.field === 'measure') measure = sel.value;
+      if (sel.dataset.field === 'group_by') groupBy = sel.value;
+      if (sel.dataset.field === 'time_col') timeCol = sel.value;
+    });
+    document.getElementById('forecastClarification').innerHTML = '';
+    document.getElementById('forecastExplanation').textContent =
+      `Medida: '${measure}'.${groupBy ? ` Agrupado por: '${groupBy}'.` : ''} En el tiempo: '${timeCol}'.`;
+    runForecast(tableLbl, measure, groupBy, timeCol);
+  });
+  box.appendChild(confirmBtn);
+
+  document.getElementById('forecastClarification').innerHTML = '';
+  document.getElementById('forecastClarification').appendChild(box);
+}
+
+async function runForecast(tableLbl, measure, groupBy, timeCol) {
+  const method = document.getElementById('forecastMethod').value;
+  const horizon = parseInt(document.getElementById('forecastHorizon').value, 10) || 3;
+  try {
+    const res = await apiFetch('/api/forecast/data', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        analysis_id: currentAnalysis.analysis_id, table_label: tableLbl,
+        measure, group_by: groupBy, time_col: timeCol, horizon, method,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      document.getElementById('forecastExplanation').textContent = data.detail || 'Error al proyectar.';
+      return;
+    }
+    drawForecast(data);
+  } catch (e) {
+    document.getElementById('forecastExplanation').textContent = 'Error: ' + e.message;
+  }
+}
+
+function drawForecast(data) {
+  const ctx = document.getElementById('forecastCanvas').getContext('2d');
+  if (forecastInstance) forecastInstance.destroy();
+  const palette = ['#5eb1ff', '#4ade80', '#fbbf24', '#f87171', '#c084fc', '#38bdf8'];
+  const showBounds = data.series.length === 1;
+
+  const labels = data.series[0].historical_labels.concat(data.series[0].forecast_labels);
+  const datasets = [];
+
+  data.series.forEach((s, i) => {
+    const color = palette[i % palette.length];
+    const nHist = s.historical_labels.length;
+    datasets.push({
+      label: `${s.name} (histórico)`,
+      data: s.historical_values.concat(Array(s.forecast_labels.length).fill(null)),
+      borderColor: color, backgroundColor: color, fill: false, tension: 0.25,
+    });
+    datasets.push({
+      label: `${s.name} (proyección)`,
+      data: Array(nHist - 1).fill(null).concat([s.historical_values[nHist - 1]], s.forecast_values),
+      borderColor: color, backgroundColor: color, borderDash: [6, 4], fill: false, tension: 0.25,
+    });
+    if (showBounds) {
+      datasets.push({
+        label: `${s.name} (límite superior)`,
+        data: Array(nHist - 1).fill(null).concat([s.historical_values[nHist - 1]], s.upper_bound),
+        borderColor: color + '55', borderDash: [2, 3], pointRadius: 0, fill: false,
+      });
+      datasets.push({
+        label: `${s.name} (límite inferior)`,
+        data: Array(nHist - 1).fill(null).concat([s.historical_values[nHist - 1]], s.lower_bound),
+        borderColor: color + '55', borderDash: [2, 3], pointRadius: 0, fill: false,
+      });
+    }
+  });
+
+  forecastInstance = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      plugins: { legend: { labels: { color: '#e6e8ee' } } },
+      scales: {
+        x: { ticks: { color: '#8b93a7' }, grid: { color: '#2a2e3a' } },
+        y: { ticks: { color: '#8b93a7' }, grid: { color: '#2a2e3a' } },
+      },
+    },
+  });
+}
+
+// ---------- Limpieza ----------
+document.getElementById('cleanApplyBtn').addEventListener('click', async () => {
+  const tableLbl = document.getElementById('cleaningTableSelect').value;
+  const useAi = document.getElementById('useAiCheckbox').checked;
+  const btn = document.getElementById('cleanApplyBtn');
+  const resultEl = document.getElementById('cleaningResult');
+  btn.disabled = true;
+  btn.textContent = 'Aplicando...';
+  resultEl.innerHTML = '';
+
+  try {
+    const res = await apiFetch('/api/clean/apply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis_id: currentAnalysis.analysis_id, table_label: tableLbl, use_ai: useAi }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      resultEl.innerHTML = `<div style="color:var(--danger);">${data.detail || 'Error al limpiar.'}</div>`;
+      return;
+    }
+    renderCleaningResult(data);
+  } catch (e) {
+    resultEl.innerHTML = `<div style="color:var(--danger);">Error: ${e.message}</div>`;
+  }
+  btn.disabled = false;
+  btn.textContent = 'Aplicar correcciones y re-analizar';
+});
+
+function renderCleaningResult(data) {
+  const el = document.getElementById('cleaningResult');
+  el.innerHTML = '';
+
+  const summary = document.createElement('div');
+  summary.className = 'clarify-box';
+  summary.innerHTML = `<div style="font-weight:600; margin-bottom:8px;">
+    ${data.applied.length} corrección(es) aplicada(s) · ${data.rows_before} → ${data.rows_after} filas
+  </div>`;
+  data.applied.forEach(a => {
+    const row = document.createElement('div');
+    row.className = 'rel-row';
+    row.innerHTML = `<b>${a.rule_name}</b>${a.column ? ` (${a.column})` : ''}: ${a.message}`;
+    summary.appendChild(row);
+  });
+  if (data.not_auto_fixable.length) {
+    const warn = document.createElement('div');
+    warn.style.marginTop = '10px';
+    warn.style.color = 'var(--warn)';
+    warn.innerHTML = `<b>Sin arreglo automático (requieren revisión manual):</b> ${data.not_auto_fixable.join(', ')}`;
+    summary.appendChild(warn);
+  }
+  el.appendChild(summary);
+
+  const beforeFindings = currentAnalysis.tables.find(t => tableLabel(t) === document.getElementById('cleaningTableSelect').value)?.quality_findings.length ?? 0;
+  const afterFindings = data.cleaned_analysis.tables.reduce((sum, t) => sum + t.quality_findings.length, 0);
+  const compare = document.createElement('div');
+  compare.style.marginTop = '14px';
+  compare.style.fontSize = '0.9rem';
+  compare.innerHTML = `Hallazgos de calidad: <b>${beforeFindings}</b> → <b>${afterFindings}</b>`;
+  el.appendChild(compare);
+
+  const actions = document.createElement('div');
+  actions.style.marginTop = '14px';
+  actions.style.display = 'flex';
+  actions.style.gap = '10px';
+
+  const viewBtn = document.createElement('button');
+  viewBtn.textContent = 'Ver análisis limpio';
+  viewBtn.addEventListener('click', () => {
+    currentAnalysis = data.cleaned_analysis;
+    renderAll();
+    document.querySelector('nav.tabs button[data-tab="quality"]').click();
+    loadHistory();
+  });
+  actions.appendChild(viewBtn);
+
+  const downloadBtn = document.createElement('button');
+  downloadBtn.className = 'secondary';
+  downloadBtn.textContent = 'Descargar archivo limpio';
+  downloadBtn.addEventListener('click', async () => {
+    const tableLbl = document.getElementById('cleaningTableSelect').value;
+    const res = await apiFetch('/api/clean/download', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis_id: currentAnalysis.analysis_id, table_label: tableLbl }),
+    });
+    if (!res.ok) { alert('Error al descargar.'); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'archivo_limpio.xlsx';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+  actions.appendChild(downloadBtn);
+
+  el.appendChild(actions);
+}
+
+// ---------- Configuración de IA ----------
+const aiProviderSelect = document.getElementById('aiProvider');
+const aiApiKey = document.getElementById('aiApiKey');
+const aiBaseUrl = document.getElementById('aiBaseUrl');
+const aiModel = document.getElementById('aiModel');
+const aiStatus = document.getElementById('aiStatus');
+
+async function loadAiProviders() {
+  const providers = await (await apiFetch('/api/ai-config/providers')).json();
+  aiProviderSelect.innerHTML = providers.map(p => `<option value="${p.id}">${p.label}</option>`).join('');
+}
+
+async function loadAiConfig() {
+  const cfg = await (await apiFetch('/api/ai-config')).json();
+  aiProviderSelect.value = cfg.provider || 'none';
+  aiBaseUrl.value = cfg.base_url || '';
+  aiModel.value = cfg.model || '';
+  aiApiKey.value = '';
+  aiApiKey.placeholder = cfg.api_key ? `Configurada (${cfg.api_key}) — dejar vacío para mantenerla` : 'Dejar vacío si no aplica';
+}
+
+document.getElementById('aiSaveBtn').addEventListener('click', async () => {
+  aiStatus.textContent = 'Probando conexión...';
+  aiStatus.className = 'status-line';
+  const payload = {
+    provider: aiProviderSelect.value,
+    api_key: aiApiKey.value || null,
+    base_url: aiBaseUrl.value || null,
+    model: aiModel.value || null,
+  };
+  try {
+    const res = await apiFetch('/api/ai-config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    aiStatus.textContent = data.message;
+    aiStatus.className = 'status-line ' + (data.connection_ok ? 'ok' : 'err');
+    await loadAiConfig();
+  } catch (e) {
+    aiStatus.textContent = 'Error al guardar: ' + e.message;
+    aiStatus.className = 'status-line err';
+  }
+});
+
+// ---------- Historial ----------
+const historyListEl = document.getElementById('historyList');
+
+async function loadHistory() {
+  try {
+    const data = await (await apiFetch('/api/history?limit=15')).json();
+    if (!data.items.length) {
+      historyListEl.innerHTML = '<span style="color:var(--muted)">Todavía no hay análisis guardados.</span>';
+      return;
+    }
+    historyListEl.innerHTML = data.items.map(item => `
+      <div class="history-item" data-id="${item.id}">
+        ${item.filename}
+        <div class="h-meta">${new Date(item.created_at).toLocaleString()} · ${item.tables_count} tabla(s) · ${item.findings_count} hallazgo(s)</div>
+      </div>`).join('') + `<div style="font-size:0.7rem; color:var(--muted); margin-top:6px;">Almacenamiento: ${data.storage_backend}</div>`;
+
+    historyListEl.querySelectorAll('.history-item').forEach(el => {
+      el.addEventListener('click', async () => {
+        const full = await (await apiFetch(`/api/history/${el.getAttribute('data-id')}`)).json();
+        currentAnalysis = full;
+        renderAll();
+      });
+    });
+  } catch (e) {
+    historyListEl.innerHTML = `<span style="color:var(--danger)">No se pudo cargar el historial: ${e.message}</span>`;
+  }
+}
+
+// ---------- Datos sintéticos ----------
+let syntheticVariants = [];
+
+async function loadSyntheticVariants() {
+  syntheticVariants = await (await apiFetch('/api/synthetic/variants')).json();
+  const sel = document.getElementById('syntheticVariant');
+  sel.innerHTML = syntheticVariants.map(v => `<option value="${v.id}">${v.label}</option>`).join('');
+  updateSyntheticDesc();
+}
+
+function updateSyntheticDesc() {
+  const sel = document.getElementById('syntheticVariant');
+  const variant = syntheticVariants.find(v => v.id === sel.value);
+  if (!variant) return;
+  document.getElementById('syntheticDesc').textContent = variant.description;
+  document.getElementById('syntheticN').value = variant.default_n;
+}
+
+document.getElementById('syntheticVariant').addEventListener('change', updateSyntheticDesc);
+
+document.getElementById('syntheticAnalyzeBtn').addEventListener('click', async () => {
+  const variant = document.getElementById('syntheticVariant').value;
+  const n = parseInt(document.getElementById('syntheticN').value, 10) || null;
+  const useAi = document.getElementById('useAiCheckbox').checked;
+  const btn = document.getElementById('syntheticAnalyzeBtn');
+  btn.disabled = true;
+  btn.textContent = 'Generando...';
+  try {
+    const res = await apiFetch(`/api/synthetic/analyze?use_ai=${useAi}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ variant, n_records: n }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert('Error al generar: ' + (err.detail || 'desconocido'));
+      return;
+    }
+    currentAnalysis = await res.json();
+    renderAll();
+    await loadHistory();
+  } catch (e) {
+    alert('No se pudo conectar con el servidor: ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = 'Generar y analizar';
+});
+
+document.getElementById('syntheticDownloadBtn').addEventListener('click', async () => {
+  const variant = document.getElementById('syntheticVariant').value;
+  const n = parseInt(document.getElementById('syntheticN').value, 10) || null;
+  try {
+    const res = await apiFetch('/api/synthetic/download', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ variant, n_records: n }),
+    });
+    if (!res.ok) { alert('Error al generar el archivo.'); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sintetico_${variant}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('No se pudo conectar con el servidor: ' + e.message);
+  }
+});
+
+// ---------- Gestión de usuarios ----------
+let availableRoles = [];
+
+async function loadUsers() {
+  try {
+    const [roles, users] = await Promise.all([
+      (await apiFetch('/api/users/roles')).json(),
+      (await apiFetch('/api/users')).json(),
+    ]);
+    availableRoles = roles;
+    const isSuperAdmin = currentUser.role === 'super_admin';
+    const assignableRoles = isSuperAdmin ? roles : roles.filter(r => ['analista', 'report_viewer'].includes(r.id));
+
+    const roleSelect = document.getElementById('newUserRole');
+    roleSelect.innerHTML = assignableRoles.map(r => `<option value="${r.id}">${r.label}</option>`).join('');
+
+    const tbody = document.getElementById('usersTableBody');
+    tbody.innerHTML = users.map(u => {
+      const canManage = isSuperAdmin || ['analista', 'report_viewer'].includes(u.role);
+      const roleOptions = (isSuperAdmin ? roles : assignableRoles)
+        .map(r => `<option value="${r.id}" ${r.id === u.role ? 'selected' : ''}>${r.label}</option>`).join('');
+      return `
+        <tr data-id="${u.id}">
+          <td>${u.username}</td>
+          <td>${canManage
+            ? `<select class="role-select-inline" data-action="role">${roleOptions}</select>`
+            : roles.find(r => r.id === u.role)?.label || u.role}</td>
+          <td>${canManage ? `<input type="checkbox" data-action="active" ${u.active ? 'checked' : ''} />` : (u.active ? 'Sí' : 'No')}</td>
+          <td>${canManage && u.username !== currentUser.username ? `<button class="secondary" data-action="delete" style="padding:3px 8px; font-size:0.72rem;">Eliminar</button>` : ''}</td>
+        </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('tr').forEach(row => {
+      const userId = row.getAttribute('data-id');
+      const roleSel = row.querySelector('[data-action="role"]');
+      if (roleSel) roleSel.addEventListener('change', () => updateUserField(userId, { role: roleSel.value }));
+      const activeChk = row.querySelector('[data-action="active"]');
+      if (activeChk) activeChk.addEventListener('change', () => updateUserField(userId, { active: activeChk.checked }));
+      const delBtn = row.querySelector('[data-action="delete"]');
+      if (delBtn) delBtn.addEventListener('click', () => deleteUserById(userId));
+    });
+  } catch (e) {
+    document.getElementById('userMgmtStatus').textContent = 'Error al cargar usuarios: ' + e.message;
+  }
+}
+
+async function updateUserField(userId, payload) {
+  const statusEl = document.getElementById('userMgmtStatus');
+  try {
+    const res = await apiFetch(`/api/users/${userId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) { statusEl.textContent = data.detail || 'Error al actualizar.'; statusEl.className = 'status-line err'; return; }
+    statusEl.textContent = 'Usuario actualizado.'; statusEl.className = 'status-line ok';
+    await loadUsers();
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message; statusEl.className = 'status-line err';
+  }
+}
+
+async function deleteUserById(userId) {
+  if (!confirm('¿Eliminar este usuario? Esta acción no se puede deshacer.')) return;
+  const statusEl = document.getElementById('userMgmtStatus');
+  try {
+    const res = await apiFetch(`/api/users/${userId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { statusEl.textContent = data.detail || 'Error al eliminar.'; statusEl.className = 'status-line err'; return; }
+    statusEl.textContent = 'Usuario eliminado.'; statusEl.className = 'status-line ok';
+    await loadUsers();
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message; statusEl.className = 'status-line err';
+  }
+}
+
+document.getElementById('createUserBtn').addEventListener('click', async () => {
+  const username = document.getElementById('newUserUsername').value.trim();
+  const password = document.getElementById('newUserPassword').value;
+  const role = document.getElementById('newUserRole').value;
+  const statusEl = document.getElementById('userMgmtStatus');
+  if (!username || !password) return;
+  try {
+    const res = await apiFetch('/api/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, role }),
+    });
+    const data = await res.json();
+    if (!res.ok) { statusEl.textContent = data.detail || 'Error al crear usuario.'; statusEl.className = 'status-line err'; return; }
+    statusEl.textContent = `Usuario '${username}' creado.`; statusEl.className = 'status-line ok';
+    document.getElementById('newUserUsername').value = '';
+    document.getElementById('newUserPassword').value = '';
+    await loadUsers();
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message; statusEl.className = 'status-line err';
+  }
+});
+
+// ---------- Arranque ----------
+tryResumeSession();
+</script>
+</body>
+</html>
