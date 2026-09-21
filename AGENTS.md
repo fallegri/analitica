@@ -18,13 +18,12 @@ Open http://localhost:8000. No database required for basic analysis features.
 
 ## Entry point
 
-`backend/app/main.py` — FastAPI `app` object. All routers live under `app.routers`,
-all business logic under `app.services`. Quality rules are in `app/services/quality/`
-(one file per rule, `engine.py` orchestrates them).
+`api/index.py` — thin wrapper that adds `backend/` to `sys.path` and imports the FastAPI `app` from `backend/app/main.py`. All routers live under `backend/app/routers`, all business logic under `backend/app/services`. Quality rules are in `backend/app/services/quality/` (one file per rule, `engine.py` orchestrates them).
 
 ## Vercel deployment
 
-- `pyproject.toml` at root sets `entrypoint = "backend.app.main:app"` (Vercel auto-detect). `vercel.json` must NOT contain a `functions` block pointing to a different path — Vercel would try to find functions in `api/` and fail.
+- Entry point is `api/index.py` which imports `app` from `backend/app/main.py`. Vercel auto-detects functions in `api/`.
+- `vercel.json` rewrites all non-static routes to `/api/index`.
 - `public/index.html` at root is served by Vercel CDN — do NOT confuse with `backend/frontend/index.html` (local dev only).
 - If `StaticFiles` mount fails, the API (`/api/*`) still works — only HTML on `/` is affected.
 
